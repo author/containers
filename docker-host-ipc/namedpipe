@@ -1,0 +1,42 @@
+#!/bin/sh
+cleanup() {
+  echo "Received SIGINT, closing..."
+  exit 0
+}
+
+trap cleanup INT
+set -e
+
+if [ -z "$NAMED_PIPE" ]; then
+  echo "using default pipe /ipc/channel"
+  NAMED_PIPE=/ipc/channel
+fi
+
+if [ ! -p "$NAMED_PIPE" ]; then
+  echo "creating named pipe ($NAMED_PIPE)"
+  DIR_PATH=$(dirname "$NAMED_PIPE")
+  mkdir -p "$DIR_PATH"
+  chmod 777 "$DIR_PATH"
+  mkfifo "$NAMED_PIPE"
+
+  if [ -z "$MAX_LOG_LINES" ]; then
+    MAX_LOG_LINES=25000
+  fi
+fi
+
+echo "now monitoring $NAMED_PIPE"
+
+mkdir -p /tmp
+
+while true; do
+  if [ -n "$LOG" ]; then
+    DIR_PATH=$(dirname "$LOG")
+    mkdir -p "$DIR_PATH"
+    touch "$LOG"
+    result=$(eval "$(cat "$NAMED_PIPE")" 2>&1)
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $result" >> "$LOG"
+    tail -n $MAX_LOG_LINES "$LOG" > /tmp/tmp.log && mv /tmp/tmp.log "$LOG"
+  else
+    eval "$(cat $NAMED_PIPE)"
+  fi
+done
