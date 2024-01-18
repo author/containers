@@ -1,0 +1,12 @@
+#!/bin/sh
+
+if [ -z "$CRON" ]; then
+  CRON="0 */12 * * *"
+fi
+
+TMP_CRON_FILE=$(mktemp)
+echo "$CRON /scripts/renew" > "$TMP_CRON_FILE"
+
+crontab "$TMP_CRON_FILE"
+
+rm "$TMP_CRON_FILE"

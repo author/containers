@@ -1,0 +1,112 @@
+#!/bin/sh
+# The domain to renew
+LIVE_PATH="/certs/live/$DOMAIN"
+EMAIL=letsencrypt@$DOMAIN
+
+if [ -z "$DNS_PROPAGATION_SECONDS" ]; then
+  DNS_PROPAGATION_SECONDS=10
+fi
+
+# Check if the certificate exists
+if [ -d "$LIVE_PATH" ]; then
+  # Get the expiration time of the certificate in seconds since epoch
+  EXPIRATION_TIME=$(openssl x509 -enddate -noout -in "$LIVE_PATH/cert.pem" | cut -d= -f2 | xargs -I{} date -d {} +%s)
+
+  # Calculate the time until expiration in seconds
+  TIME_UNTIL_EXPIRATION=$((EXPIRATION_TIME - CREATION_TIME))
+
+  # Calculate the time until expiration in hours
+  TIME_UNTIL_EXPIRATION_HOURS=$((TIME_UNTIL_EXPIRATION / 3600))
+
+  # Check if the certificate will expire within the next 24 hours
+  if [ "$TIME_UNTIL_EXPIRATION_HOURS" -ge 24 ]; then
+    echo "$DOMAIN certificate renewal is unnecessary. It won't expire until $(openssl x509 -enddate -noout -in "$LIVE_PATH/cert.pem" | cut -d= -f2) ($TIME_UNTIL_EXPIRATION_HOURS hours)."
+    if [ -f "$AFTER_ABORT" ]; then
+      if [ -z "$IPC" ]; then
+        cat "$AFTER_ABORT" > "$IPC"
+      else
+        chmod +x "$AFTER_ABORT"
+        "$AFTER_ABORT" 2>&1
+      fi
+    else
+      if [ ! -z "$AFTER_ABORT" ]; then
+        if [ -z "$IPC" ]; then
+          echo "$AFTER_ABORT" > "$IPC"
+        else
+          "$AFTER_ABORT" 2>&1
+        fi
+      fi
+    fi
+    exit 0
+  fi
+fi
+
+# Generate if no cert exists or if an existing cert needs to be renewed within 24 hours.
+echo "Generating/renewing certificate for $DOMAIN: (takes minimum $DNS_PROPAGATION_SECONDS seconds)"
+
+# Create the Cloudflare credentials
+mkdir /secure
+if [ -f "/secure/cloudflare_credentials.ini" ]; then
+else
+  if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+    echo "Cloudflare API token not found. Cannot create/renew $DOMAIN certificate"
+    exit 1
+  fi
+
+  echo "dns_cloudflare_api_token = $CLOUDFLARE_API_TOKEN" > /secure/cloudflare_credentials.ini
+fi
+
+# Generate/renew certificate
+certonly \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials /secure/cloudflare_credentials.ini \
+  --email $EMAIL \
+  --register-unsafely-without-email \
+  --agree-tos \
+  --renew-by-default \
+  -d $DOMAIN
+
+# Check if the certificate exists
+if [ -d "$LIVE_PATH" ]; then
+  # Get the expiration time of the certificate in seconds since epoch
+  EXPIRATION_TIME=$(openssl x509 -enddate -noout -in "$LIVE_PATH/cert.pem" | cut -d= -f2 | xargs -I{} date -d {} +%s)
+
+  # Calculate the time until expiration in seconds
+  TIME_UNTIL_EXPIRATION=$((EXPIRATION_TIME - CREATION_TIME))
+
+  # Calculate the time until expiration in hours
+  TIME_UNTIL_EXPIRATION_HOURS=$((TIME_UNTIL_EXPIRATION / 3600))
+
+  # Check if the certificate will expire within the next 24 hours
+  if [ "$TIME_UNTIL_EXPIRATION_HOURS" -ge 24 ]; then
+    cat $LIVE_PATH/fullchain.pem $LIVE_PATH/privkey.pem > $LIVE_PATH/trusted.pem
+    cat $LIVE_PATH/fullchain.pem > $LIVE_PATH/fullchain.crt
+    cat $LIVE_PATH/chain.pem > $LIVE_PATH/ca.pem
+    cat $LIVE_PATH/cert.pem > $LIVE_PATH/certificate.pem
+    cat $LIVE_PATH/privkey.pem > $LIVE_PATH/private.key
+
+    echo "$DOMAIN certificate renewal complete."
+
+    if [ -f "$AFTER_SUCCESS" ]; then
+      if [ -z "$IPC" ]; then
+        cat "$AFTER_SUCCESS" > "$IPC"
+      else
+        chmod +x "$AFTER_SUCCESS"
+        "$AFTER_SUCCESS" 2>&1
+      fi
+    else
+      if [ ! -z "$AFTER_SUCCESS" ]; then
+        if [ -z "$IPC" ]; then
+          echo "$AFTER_SUCCESS" > "$IPC"
+        else
+          "$AFTER_SUCCESS" 2>&1
+        fi
+      fi
+    fi
+
+    exit 0
+  fi
+fi
+
+echo "Could not find a recently created/updated $DOMAIN certificate at $LIVE_PATH"
+exit 1
