@@ -1,0 +1,230 @@
+#!/bin/sh -e
+
+# Function to download the contents of a directory
+download_directory() {
+    local repo=$1
+    local directory=$2
+
+    mkdir -p /app/tmp
+    cd /app/tmp
+    if [ -p ".git" ]; then
+      rm -r .git
+    fi
+    git config --global init.defaultBranch main
+    git init
+    git remote add -f origin https://$GITHUB_USER:$GITHUB_TOKEN@github.com/$repo.git
+    git config core.sparsecheckout true
+    echo $directory/ >> .git/info/sparse-checkout
+    git pull origin main
+
+    mv -if /app/tmp/$directory/* /app
+    rm -rf /app/tmp
+
+    echo "Download completed. Contents are in /app"
+    ls -l /app
+}
+
+# Function to download the contents of a branch
+download_branch() {
+    local repo=$1
+    local branch=$2
+
+    if [ -p ".git" ]; then
+      rm -r .git
+    fi
+    git config --global init.defaultBranch $branch
+    git init
+    git remote add -f origin https://$GITHUB_USER:$GITHUB_TOKEN@github.com/$repo.git
+    git config core.sparsecheckout true
+    set -x
+    git pull origin $branch
+
+    echo "Download completed. Contents are in /app"
+    ls -l /app
+}
+
+# Prompt user for GitHub repository details
+if [ ! -z "$GITHUB_ORG" ]; then
+  API_URL="https://api.github.com/orgs/$GITHUB_ORG/repos"
+  response=$(curl -s -H "Authorization: token $GITHUB_TOKEN" $API_URL)
+
+  # Check if the response is an array and not empty
+  if [[ "$(echo "$response" | jq 'length > 0')" == "true" ]]; then
+    # Extract repository names from the response using jq
+    repo_names=$(echo "$response" | jq -r ".[].name")
+
+    # Display the list of repository names
+    echo "Available repositories:"
+    count=1
+    for r in $repo_names; do
+      echo "  $count. $GITHUB_ORG/$r"
+      count=$((count+1))
+    done
+    echo "  q. Quit"
+    echo ""
+
+    while true; do
+      read -p "Enter the number of the repo to setup: " choice
+      case $choice in
+        [1-9]*)
+          if [ $choice -le $count ]; then
+            selected=$(echo $repo_names | awk "{print \$"$choice"}")
+            echo ""
+            echo "Using $GITHUB_ORG/$selected"
+            repo="$GITHUB_ORG/$selected"
+            break
+          else
+            echo "Invalid choice. Please enter a valid number."
+          fi
+          ;;
+        "q" | "Q")
+          echo "setup aborted"
+          break
+          ;;
+        *)
+          echo "Invalid choice. Please enter a valid number."
+          ;;
+      esac
+    done
+  else
+    echo "No repositories found in $GITHUB_ORG accessible by $GITHUB_USER."
+    exit 0
+  fi
+else
+  read -p "Repository: " repo
+  # Verify repo exists
+  chk_repo_url="https://api.github.com/repos/$repo"
+  response=$(curl -H "Authorization: token $GITHUB_TOKEN" -s -o /dev/null -w "%{http_code}" "$chk_repo_url")
+  if [ "$response" -eq 404 ]; then
+    echo "Repository '$repo' does not exist."
+    exit 1
+  fi
+fi
+
+# Prompt for setup type
+echo ""
+echo "Setup from:"
+echo "  1. Branch"
+echo "  2. Directory"
+echo "  q. Quit"
+echo ""
+while true; do
+  read -p "Enter the number of the repo arrangement: " choice
+  case $choice in
+    1)
+      # Fetch remote branch names
+      branch_names=$(git ls-remote --heads "https://$GITHUB_USER:$GITHUB_TOKEN@github.com/$repo.git" | awk -F/ '{print $NF}')
+
+      echo ""
+      echo "Select a branch:"
+      count=1
+      for dir in $branch_names; do
+        echo "  $count. $dir"
+        count=$((count+1))
+      done
+      echo "  q. Quit"
+      echo ""
+
+      while true; do
+        read -p "Enter the number of your choice: " choice
+        case $choice in
+          [1-9]*)
+            if [ $choice -le $count ]; then
+              selected=$(echo $branch_names | awk "{print \$"$choice"}")
+              echo "You selected branch: $selected"
+              download_branch $repo $selected
+              exit 0
+            else
+              echo "Invalid choice. Please enter a valid number."
+            fi
+            ;;
+          "q" | "Q")
+            echo "setup aborted"
+            break
+            ;;
+          *)
+            echo "Invalid choice. Please enter a valid number."
+            ;;
+        esac
+      done
+      ;;
+    2)
+      repo_url="https://api.github.com/repos/$repo/contents"
+
+      # Use curl to make a request to the GitHub API
+      echo "Retrieving $repo top level directories..."
+      response=$(curl -s -u "$GITHUB_USER:$GITHUB_TOKEN" $repo_url)
+
+      # Check if the request was successful
+      if [ $? -ne 0 ]; then
+        echo "Failed to retrieve repository contents. Please check your credentials and repository information."
+        exit 1
+      fi
+
+      # Check if the response is an error
+      # Check if the response is an array
+      if [ "$(echo "$response" | jq 'type')" = "array" ]; then
+        # Check if the array has any elements
+        if [ "$(echo "$response" | jq 'length')" -gt 0 ]; then
+          # Check if the first element of the array has a "message" key
+          if [ "$(echo "$response" | jq -r '.[0] | has("message")')" = "true" ]; then
+            # Extract and print the error message
+            err_msg=$(echo "$response" | jq -r '.[0].message')
+            echo "Error: $err_msg"
+            exit 1
+          fi
+        fi
+      fi
+
+      # Extract directory names from the API response
+      directories=$(echo $response | jq -r '.[] | select(.type == "dir") | .name')
+
+      # Check if there are any directories
+      if [ -z "$directories" ]; then
+        echo "No directories found in the main branch."
+        exit 1
+      fi
+
+      # Display the menu
+      echo ""
+      echo "Select a directory or Quit:"
+      count=1
+      for dir in $directories; do
+        echo "  $count. $dir"
+        count=$((count+1))
+      done
+      echo "  q. Quit"
+      echo ""
+
+      # Prompt the user to select a directory
+      while true; do
+        read -p "Enter the number of your choice: " choice
+        case $choice in
+          [1-9]*)
+            if [ $choice -le $count ]; then
+              selected_dir=$(echo $directories | awk "{print \$"$choice"}")
+              echo "You selected directory: $selected_dir"
+              download_directory $repo $selected_dir
+              exit 0
+            else
+              echo "Invalid choice. Please enter a valid number."
+            fi
+            ;;
+          "q" | "Q")
+            echo "setup aborted"
+            break
+            ;;
+          *)
+            echo "Invalid choice. Please enter a valid number."
+            ;;
+          esac
+      done
+      ;;
+    "q" | "Q")
+      echo "setup aborted"
+      exit 0
+      ;;
+    *)
+      echo "Invalid choice. Please enter a valid number."
+  esac
+done
