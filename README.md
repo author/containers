@@ -4,3 +4,4 @@ This repository contains purpose and task-specific containers (mostly Docker). E
 
 1. [**auto-letsencrypt-cloudflare**](./auto-letsencrypt-cloudflare): Automated LetsEncrypt SSL certificate creation/renewal with post-processing hooks.
 2. **[docker-host-ipc](./docker-host-ipc)**: Communicate with the Docker host from within a Docker container.
+2. **[setup](./setup)**: Acquire setup scripts from GitHub, with a one-liner.
