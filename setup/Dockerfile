@@ -6,9 +6,11 @@ RUN apk update \
 COPY setup /app/
 RUN chmod +x /app/setup
 
+VOLUME /output
+
 ENV USERNAME=""
 ENV TOKEN=""
 
 WORKDIR /app
 
-CMD ["/app/setup"]
+CMD ["/bin/sh", "/app/setup"]
