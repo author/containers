@@ -10,3 +10,7 @@ echo "$CRON /scripts/renew" > "$TMP_CRON_FILE"
 crontab "$TMP_CRON_FILE"
 
 rm "$TMP_CRON_FILE"
+
+/scripts/renew
+
+crond -f

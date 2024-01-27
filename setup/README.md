@@ -46,7 +46,7 @@ docker run --rm -it \
   -e "GITHUB_USER=github_username" \
   -e "GITHUB_TOKEN=github_personal_access_token" \
   -e "GITHUB_ORG=organization" \ # optional
-  -v "./:/app" \
+  -v "./:/output" \
   author/setup
 ```
 
@@ -119,7 +119,7 @@ docker run --rm -it \
   -e "GITHUB_USER=github_username" \
   -e "GITHUB_TOKEN=github_personal_access_token" \
   -e "GITHUB_ORG=organization" \ # optional
-  -v "./:/app" \
+  -v "./:/output" \
   author/setup \
 && docker rmi author/setup
 ```
@@ -137,7 +137,7 @@ docker run --rm -it \
   -e "GITHUB_USER=github_username" \
   -e "GITHUB_TOKEN=github_personal_access_token" \
   -e "GITHUB_ORG=organization" \
-  -v "./:/app" \
+  -v "./:/output" \
   author/setup \
 && docker rmi author/setup \
 && chmod +x ./setup \

@@ -5,4 +5,4 @@ RUN chmod +x /scripts/cron && chmod +x /scripts/renew
 
 VOLUME /ipc
 
-CMD ["/scripts/cron", "&&", "crond", "-f"]
+ENTRYPOINT ["/scripts/cron"]

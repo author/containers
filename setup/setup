@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh
 
 # Function to download the contents of a directory
 download_directory() {
@@ -17,11 +17,11 @@ download_directory() {
     echo $directory/ >> .git/info/sparse-checkout
     git pull origin main
 
-    mv -if /app/tmp/$directory/* /app
+    mv -if /app/tmp/$directory/* /output
     rm -rf /app/tmp
 
     echo "Download completed. Contents are in /app"
-    ls -l /app
+    ls -l /output
 }
 
 # Function to download the contents of a branch
@@ -29,6 +29,8 @@ download_branch() {
     local repo=$1
     local branch=$2
 
+    mkdir -p /app/tmp
+    cd /app/tmp
     if [ -p ".git" ]; then
       rm -r .git
     fi
@@ -39,8 +41,11 @@ download_branch() {
     set -x
     git pull origin $branch
 
+    mv -if /app/tmp/$directory/* /output
+    rm -rf /app/tmp
+
     echo "Download completed. Contents are in /app"
-    ls -l /app
+    ls -l /output
 }
 
 # Prompt user for GitHub repository details
