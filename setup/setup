@@ -21,7 +21,7 @@ download_directory() {
     rm -rf /app/tmp
 
     echo "Download completed. Contents are in /app"
-    ls -l /app
+    ls -l /output
 }
 
 # Function to download the contents of a branch
@@ -45,7 +45,7 @@ download_branch() {
     rm -rf /app/tmp
 
     echo "Download completed. Contents are in /app"
-    ls -l /app
+    ls -l /output
 }
 
 # Prompt user for GitHub repository details
