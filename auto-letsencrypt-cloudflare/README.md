@@ -6,7 +6,7 @@ This "always-on" Linux-only container keeps LetsEncrypt TLS/SSL certificates up 
 
 - **Always-on** (cron) runs the update process on a regular schedule (configurable).
 - **Hooks**: Optionally runs a user-defined script after successful certificate creation/renewal.
-- **Cloudflare DNS Verification** (can be configured multiple times to support multiple domains).
+- **Cloudflare DNS Verification**
 - **Physical Files**: For times when an application cannot read LetsEncrypt symlinks (see "Alternative to LetsEncrypt Symlinks" below).
 
 ### Example Use cases:
@@ -23,14 +23,15 @@ While it is possible to use this to refresh certificates for HTTP servers, there
 
 **Environment Variables**
 
-| Name                               |   Required   |     Default     | Description                                                                                                  |
-| :--------------------------------- | :-----------: | :--------------: | :----------------------------------------------------------------------------------------------------------- |
-| *`AFTER_RENEW_SCRIPT`            |      No      |        -        | The command or path of the script_on the host_ to run after the successful creation/renewal of certificates. |
-| `DNS_PROPAGATION_SECONDS`        |      No      |      `10`      | Number of seconds to allow for DNS changes before LetsEncrypt verifies the DNS entries.                      |
-| **`DOMAIN`**               | **Yes** |        -        | The domain to create/renew LetsEncrypt certificates for                                                      |
-| **`CLOUDFLARE_API_TOKEN`** | **Yes** |        -        | The Cloudflare API token. This token must permissions to create DNS entries.                                 |
-| `CRON`                           |      No      | `0 */12 * * *` | The schedule to run the renewal process on. Default is every 12 hours.                                       |
-| *`NO_RENEW_SCRIPT`               |      No      |        -        | The command or path of the script_on the host_ to run if a certificate is not created/renewed.               |
+| Name                               |   Required   |     Default     | Description                                                                                                    |
+| :--------------------------------- | :-----------: | :--------------: | :------------------------------------------------------------------------------------------------------------- |
+| *`AFTER_SUCCESS`                 |      No      |        -        | The command or path of the script_on the host_ to run after the successful creation/renewal of certificates. |
+| `DNS_PROPAGATION_SECONDS`        |      No      |      `10`      | Number of seconds to allow for DNS changes before LetsEncrypt verifies the DNS entries.                        |
+| **`DOMAIN`**               | **Yes** |        -        | The domain to create/renew LetsEncrypt certificates for                                                        |
+| **`CLOUDFLARE_API_TOKEN`** | **Yes** |        -        | The Cloudflare API token. This token must permissions to create DNS entries.                                   |
+| `CRON`                           |      No      | `0 */12 * * *` | The schedule to run the renewal process on. Default is every 12 hours.                                         |
+| *`AFTER_ABORT`                   |      No      |        -        | The command or path of the script_on the host_ to run if a certificate is not created/renewed.
+| `IPC`                   |      No      |        -        | The IPC channel.                 |
 
 *Scripts reside on the host, not within the Docker container. They are executed via a [docker-host-ipc](../docker-host-ipc) channel between the container and the host.
 
@@ -38,8 +39,8 @@ While it is possible to use this to refresh certificates for HTTP servers, there
 
 | Target     | Purpose                                                |
 | :--------- | :----------------------------------------------------- |
-| `/certs` | Maps to the LetsEncrypt directory.**(REQUIRED)** |
-| `/ipc`   | Maps to the named pipe. **(SEE NOTES)**         |
+| `/etc/letsencrypt` | Maps to the LetsEncrypt directory. **(REQUIRED)** |
+| `/ipc`   | Maps to the named pipe. **(SEE NOTES)**           |
 
 **Notes**
 If you wish to run scripts in response to creation/renewal (or lack thereof), you can run them in the container or on the host. Running within the container will isolate the script to the container. This is useful for running scripts that trigger webhooks, remote processes, etc. However; the script is limited to running in the confines of the container. There are circumstances where you may wish for the script to run on the Docker host instead of within the Docker container. There are two ways to do this.
@@ -55,11 +56,11 @@ docker run --rm \
   -e "DOMAIN=my.domain.com" \
   -e "CLOUDFLARE_API_TOKEN=mytoken" \
   -e "CRON=* 0/12 * * * *" \
-  -e "AFTER_SUCCESS=/HOST_PATH/to/scriptname" \
-  -e "AFTER_ABORT=/HOST_PATH/to/scriptname" \
+  -e "AFTER_SUCCESS=/path/to/scriptname" \
+  -e "AFTER_ABORT=/path/to/scriptname" \
   -e "IPC=/ipc/channel" \
   -v "/ipc:/ipc" \ # Maps the docker-host-ipc channel directory
-  -v "/etc/letsencrypt:/certs" \
+  -v "/etc/letsencrypt:/etc/letsencrypt" \
   author/autorenew-letsencrypt-cloudflare
 ```
 
@@ -77,8 +78,10 @@ services:
       CRON: "0 */12 * * *"
       AFTER_SUCCESS: /handlers/scriptname
       AFTER_ABORT: /handlers/scriptname
+      IPC: /ipc/channel
     volumes:
-      /path/to/letsencrypt/live:/certs
+      /path/to/letsencrypt:/etc/letsencrypt
+      /ipc:/ipc
     restart: unless-stopped
 ```
 
