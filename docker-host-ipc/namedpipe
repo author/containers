@@ -4,7 +4,7 @@ cleanup() {
   exit 0
 }
 
-trap cleanup INT
+trap cleanup TERM INT
 set -e
 
 if [ -z "$NAMED_PIPE" ]; then
@@ -40,3 +40,11 @@ while true; do
     eval "$(cat $NAMED_PIPE)"
   fi
 done
+
+# cleanup() {
+#   echo "Received SIGINT, closing..."
+#   exit 0
+# }
+
+# trap cleanup TERM INT
+# set -e
